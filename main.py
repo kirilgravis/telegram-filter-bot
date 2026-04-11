@@ -40,8 +40,33 @@ def should_skip(text: str) -> bool:
     return has_blacklist and not has_whitelist
 
 
+@client.on(events.Album(chats=SOURCE_CHANNEL))
+async def album_handler(event):
+    """Handle media groups (albums) — multiple photos/videos sent together."""
+    text = ""
+    for msg in event.messages:
+        if msg.message:
+            text = msg.message
+            break
+
+    if should_skip(text):
+        log.info(
+            "Skipped album (grouped_id=%s, %d items) — matched blacklist, no whitelist override",
+            event.messages[0].grouped_id,
+            len(event.messages),
+        )
+        return
+
+    log.info("Forwarding album (%d items) to %s", len(event.messages), DESTINATION)
+    await client.forward_messages(DESTINATION, event.messages)
+
+
 @client.on(events.NewMessage(chats=SOURCE_CHANNEL))
 async def handler(event):
+    # Skip messages that belong to an album — already handled by album_handler
+    if event.message.grouped_id is not None:
+        return
+
     text = event.message.message or ""
     if should_skip(text):
         log.info("Skipped message %s (matched blacklist, no whitelist override)", event.message.id)
