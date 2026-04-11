@@ -1,0 +1,6 @@
+{
+  "source_channel": "@markettwits",
+  "destination": "@kg_capital_market",
+  "blacklist": ["#россия"],
+  "whitelist": ["#сша"]
+}
