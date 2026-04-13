@@ -15,6 +15,7 @@ load_dotenv()
 
 API_ID = int(os.environ["API_ID"])
 API_HASH = os.environ["API_HASH"]
+BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 with open("config.json", encoding="utf-8") as f:
     config = json.load(f)
@@ -24,7 +25,11 @@ DESTINATION = config["destination"]
 BLACKLIST = [w.lower() for w in config["blacklist"]]
 WHITELIST = [w.lower() for w in config["whitelist"]]
 
+# User client — monitors the source channel (needs your personal account)
 client = TelegramClient("session", API_ID, API_HASH)
+
+# Bot client — forwards messages to destination (so you get notifications)
+bot = TelegramClient("bot_session", API_ID, API_HASH)
 
 
 def should_skip(text: str) -> bool:
@@ -57,8 +62,9 @@ async def album_handler(event):
         )
         return
 
-    log.info("Forwarding album (%d items) to %s", len(event.messages), DESTINATION)
-    await client.forward_messages(DESTINATION, event.messages)
+    log.info("Forwarding album (%d items) to %s via bot", len(event.messages), DESTINATION)
+    msg_ids = [msg.id for msg in event.messages]
+    await bot.forward_messages(DESTINATION, msg_ids, SOURCE_CHANNEL)
 
 
 @client.on(events.NewMessage(chats=SOURCE_CHANNEL))
@@ -72,16 +78,22 @@ async def handler(event):
         log.info("Skipped message %s (matched blacklist, no whitelist override)", event.message.id)
         return
 
-    log.info("Forwarding message %s to %s", event.message.id, DESTINATION)
-    await event.message.forward_to(DESTINATION)
+    log.info("Forwarding message %s to %s via bot", event.message.id, DESTINATION)
+    await bot.forward_messages(DESTINATION, event.message.id, SOURCE_CHANNEL)
 
 
 def main():
     log.info("Starting filter bot...")
     log.info("Source: %s | Destination: %s", SOURCE_CHANNEL, DESTINATION)
     log.info("Blacklist: %s | Whitelist: %s", BLACKLIST, WHITELIST)
+
     client.start()
-    log.info("Connected. Listening for new messages...")
+    log.info("User client connected.")
+
+    bot.start(bot_token=BOT_TOKEN)
+    log.info("Bot client connected (@kg_forwarder_bot).")
+
+    log.info("Listening for new messages...")
     client.run_until_disconnected()
 
 

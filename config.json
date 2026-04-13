@@ -1,6 +1,6 @@
 {
   "source_channel": "@markettwits",
   "destination": "@kg_capital_market",
-  "blacklist": ["#россия"],
-  "whitelist": ["#сша"]
+  "blacklist": ["#россия", "#крипто", "#WLFI","\uD83C\uDDF7\uD83C\uDDFA","🇷🇺", "a7.ru/veksel"],
+  "whitelist": ["#сша", "#BTC"]
 }

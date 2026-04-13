@@ -8,3 +8,4 @@ __pycache__/
 .idea/telegram-filter-bot.iml
 .idea/vcs.xml
 .idea/workspace.xml
+*.session-journal
