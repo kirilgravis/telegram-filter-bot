@@ -1,11 +1,13 @@
 {
   "source_channel": "@markettwits",
   "destination": "@kg_capital_market",
-  "blacklist": ["#россия", "#крипто", "#WLFI","\uD83C\uDDF7\uD83C\uDDFA","🇷🇺","✴\uFE0F", "a7.ru/veksel",
+  "blacklist": ["#россия", "#крипто", "#WLFI","\uD83C\uDDF7\uD83C\uDDFA","🇷🇺","✴\uFE0F",
+              "a7.ru", "a7.ru/veksel",
               "\uD83C\uDFE1", "\uD83D\uDE97", "₽", "ЦФА", "#удобрения", "#украина", "#венгрия",
               "\uD83C\uDDFA\uD83C\uDDE6", "\uD83C\uDDED\uD83C\uDDFA", "🇺🇦", "USDTRUB",
               "\uD83C\uDDED\uD83C\uDDFA", "\uD83C\uDDFA\uD83C\uDDE6",
               "#венгрия", "#украина", "#CHZ", "\uD83C\uDDF5\uD83C\uDDED",
-              "#филиппины", "\uD83C\uDDE7\uD83C\uDDEA", "#бельгия", "Жириновского"],
+              "#филиппины", "\uD83C\uDDE7\uD83C\uDDEA", "#бельгия", "Жириновского",
+              "комиссия"],
   "whitelist": ["#сша", "#BTC", "#ETOR", "#XRP"]
 }
