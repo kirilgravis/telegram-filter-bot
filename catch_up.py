@@ -53,13 +53,17 @@ def should_skip(text: str) -> bool:
     return has_blacklist and not has_whitelist
 
 
-async def get_forwarded_source_ids(source_channel_id: int, limit: int) -> set[int]:
-    """Return set of source message IDs already present in the destination."""
+async def get_forwarded_source_ids(limit: int) -> set[int]:
+    """Return set of source message IDs already present in the destination.
+
+    channel_id is None due to Telegram forwarding privacy — we rely solely
+    on channel_post (the original message ID) which is always present.
+    Since the destination is a dedicated forwarding group, every fwd_from
+    entry corresponds to the source channel.
+    """
     forwarded = set()
     async for msg in client.iter_messages(DESTINATION, limit=limit):
-        if (msg.fwd_from
-                and getattr(msg.fwd_from, "channel_id", None) == source_channel_id
-                and msg.fwd_from.channel_post is not None):
+        if msg.fwd_from and msg.fwd_from.channel_post is not None:
             forwarded.add(msg.fwd_from.channel_post)
     return forwarded
 
@@ -69,9 +73,6 @@ async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
     log.info("User client connected.")
     await bot.start(bot_token=BOT_TOKEN)
     log.info("Bot client connected.")
-
-    source_entity = await client.get_entity(SOURCE_CHANNEL)
-    source_id = source_entity.id
 
     # ------------------------------------------------------------------
     # 1. Fetch last look_back messages from source, reverse to oldest-first
@@ -89,7 +90,7 @@ async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
     # ------------------------------------------------------------------
     dest_limit = look_back * 3
     log.info("Scanning up to %d destination messages for already-forwarded IDs...", dest_limit)
-    already_forwarded = await get_forwarded_source_ids(source_id, dest_limit)
+    already_forwarded = await get_forwarded_source_ids(dest_limit)
     log.info("Found %d already-forwarded source IDs in destination.", len(already_forwarded))
 
     # ------------------------------------------------------------------
