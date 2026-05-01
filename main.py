@@ -77,7 +77,7 @@ def should_skip(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 async def process_single(msg) -> None:
-    if msg.id in _session_processed:
+    if msg.id in _session_processed or msg.id <= load_last_id():
         return
     _session_processed.add(msg.id)
 
@@ -92,7 +92,7 @@ async def process_single(msg) -> None:
 
 async def process_album(msgs) -> None:
     max_id = max(m.id for m in msgs)
-    if any(m.id in _session_processed for m in msgs):
+    if max_id <= load_last_id() or any(m.id in _session_processed for m in msgs):
         return
     for m in msgs:
         _session_processed.add(m.id)
