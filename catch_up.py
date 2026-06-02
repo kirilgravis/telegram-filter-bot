@@ -35,15 +35,14 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 with open("config.json", encoding="utf-8") as f:
     config = json.load(f)
 
+# Global variables for config (can be imported by main.py if needed, 
+# but they are already in main.py)
 SOURCE_CHANNEL = config["source_channel"]
 DESTINATION = config["destination"]
 BLACKLIST = [w.lower() for w in config["blacklist"]]
 WHITELIST = [w.lower() for w in config["whitelist"]]
 
 DEFAULT_LOOK_BACK = 300
-
-client = TelegramClient("session", API_ID, API_HASH)
-bot = TelegramClient("bot_session", API_ID, API_HASH)
 
 
 def should_skip(text: str) -> bool:
@@ -53,14 +52,8 @@ def should_skip(text: str) -> bool:
     return has_blacklist and not has_whitelist
 
 
-async def get_forwarded_source_ids(limit: int) -> set[int]:
-    """Return set of source message IDs already present in the destination.
-
-    channel_id is None due to Telegram forwarding privacy — we rely solely
-    on channel_post (the original message ID) which is always present.
-    Since the destination is a dedicated forwarding group, every fwd_from
-    entry corresponds to the source channel.
-    """
+async def get_forwarded_source_ids(client: TelegramClient, limit: int) -> set[int]:
+    """Return set of source message IDs already present in the destination."""
     forwarded = set()
     async for msg in client.iter_messages(DESTINATION, limit=limit):
         if msg.fwd_from and msg.fwd_from.channel_post is not None:
@@ -68,12 +61,8 @@ async def get_forwarded_source_ids(limit: int) -> set[int]:
     return forwarded
 
 
-async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
-    await client.start()
-    log.info("User client connected.")
-    await bot.start(bot_token=BOT_TOKEN)
-    log.info("Bot client connected.")
-
+async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: int) -> None:
+    """Core logic to fetch missing messages and forward them."""
     # ------------------------------------------------------------------
     # 1. Fetch last look_back messages from source, reverse to oldest-first
     # ------------------------------------------------------------------
@@ -90,7 +79,7 @@ async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
     # ------------------------------------------------------------------
     dest_limit = look_back * 3
     log.info("Scanning up to %d destination messages for already-forwarded IDs...", dest_limit)
-    already_forwarded = await get_forwarded_source_ids(dest_limit)
+    already_forwarded = await get_forwarded_source_ids(client, dest_limit)
     log.info("Found %d already-forwarded source IDs in destination.", len(already_forwarded))
 
     # ------------------------------------------------------------------
@@ -150,8 +139,6 @@ async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
 
     if not to_forward:
         log.info("All caught up — nothing to forward.")
-        await client.disconnect()
-        await bot.disconnect()
         return
 
     # ------------------------------------------------------------------
@@ -177,8 +164,21 @@ async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
 
     log.info("Done. Forwarded %d item(s).", forwarded_count)
 
+
+async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
+    client = TelegramClient("session", API_ID, API_HASH)
+    bot = TelegramClient("bot_session", API_ID, API_HASH)
+
+    await client.start()
+    log.info("User client connected.")
+    await bot.start(bot_token=BOT_TOKEN)
+    log.info("Bot client connected.")
+
+    await run_catch_up(client, bot, look_back)
+
     await client.disconnect()
     await bot.disconnect()
+
 
 
 if __name__ == "__main__":

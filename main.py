@@ -1,9 +1,11 @@
 import json
 import os
 import logging
+import asyncio
 
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
+from catch_up import run_catch_up
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,20 +84,40 @@ async def handler(event):
     await bot.forward_messages(DESTINATION, event.message.id, SOURCE_CHANNEL)
 
 
-def main():
+async def scheduled_catch_up():
+    """Run catch_up logic every 30 minutes."""
+    while True:
+        log.info("Starting periodic catch-up (look_back=200)...")
+        try:
+            await run_catch_up(client, bot, 200)
+        except Exception as e:
+            log.exception("Error during periodic catch-up: %s", e)
+        
+        log.info("Catch-up finished. Next run in 30 minutes.")
+        await asyncio.sleep(30 * 60)
+
+
+async def main():
     log.info("Starting filter bot...")
     log.info("Source: %s | Destination: %s", SOURCE_CHANNEL, DESTINATION)
     log.info("Blacklist: %s | Whitelist: %s", BLACKLIST, WHITELIST)
 
-    client.start()
+    await client.start()
     log.info("User client connected.")
 
-    bot.start(bot_token=BOT_TOKEN)
+    await bot.start(bot_token=BOT_TOKEN)
     log.info("Bot client connected (@kg_forwarder_bot).")
 
+    # Start the periodic catch-up task in the background
+    asyncio.create_task(scheduled_catch_up())
+
     log.info("Listening for new messages...")
-    client.run_until_disconnected()
+    await client.run_until_disconnected()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+
