@@ -116,8 +116,16 @@ async def main():
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    import time
+    
+    while True:
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            log.info("Bot stopped by user.")
+            break
+        except Exception:
+            log.exception("Bot crashed! Restarting in 10 seconds...")
+            time.sleep(10)
+
 
