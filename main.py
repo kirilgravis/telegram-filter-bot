@@ -27,6 +27,10 @@ DESTINATION = config["destination"]
 BLACKLIST = [w.lower() for w in config["blacklist"]]
 WHITELIST = [w.lower() for w in config["whitelist"]]
 
+# Track recently processed source message IDs to prevent duplicates
+# (e.g. if real-time listener and catch-up overlap)
+PROCESSED_IDS = set()
+
 # User client — monitors the source channel (needs your personal account)
 client = TelegramClient("session", API_ID, API_HASH)
 
@@ -64,15 +68,28 @@ async def album_handler(event):
         )
         return
 
+    # Check if any message in the album was already processed
+    if any(msg.id in PROCESSED_IDS for msg in event.messages):
+        log.info("Skipped album (grouped_id=%s) — already processed", event.messages[0].grouped_id)
+        return
+
     log.info("Forwarding album (%d items) to %s via bot", len(event.messages), DESTINATION)
     msg_ids = [msg.id for msg in event.messages]
     await bot.forward_messages(DESTINATION, msg_ids, SOURCE_CHANNEL)
+    
+    # Mark all messages in the album as processed
+    for mid in msg_ids:
+        PROCESSED_IDS.add(mid)
 
 
 @client.on(events.NewMessage(chats=SOURCE_CHANNEL))
 async def handler(event):
     # Skip messages that belong to an album — already handled by album_handler
     if event.message.grouped_id is not None:
+        return
+    
+    if event.message.id in PROCESSED_IDS:
+        log.info("Skipped message %s — already processed", event.message.id)
         return
 
     text = event.message.message or ""
@@ -82,19 +99,28 @@ async def handler(event):
 
     log.info("Forwarding message %s to %s via bot", event.message.id, DESTINATION)
     await bot.forward_messages(DESTINATION, event.message.id, SOURCE_CHANNEL)
+    PROCESSED_IDS.add(event.message.id)
 
 
 async def scheduled_catch_up():
     """Run catch_up logic every 30 minutes."""
     while True:
+        # Prune PROCESSED_IDS to keep memory low (keep last 1000)
+        if len(PROCESSED_IDS) > 1000:
+            log.debug("Pruning processed IDs cache...")
+            keep = sorted(list(PROCESSED_IDS))[-500:]
+            PROCESSED_IDS.clear()
+            PROCESSED_IDS.update(keep)
+
         log.info("Starting periodic catch-up (look_back=200)...")
         try:
-            await run_catch_up(client, bot, 200)
+            await run_catch_up(client, bot, 200, processed_ids=PROCESSED_IDS)
         except Exception as e:
             log.exception("Error during periodic catch-up: %s", e)
         
         log.info("Catch-up finished. Next run in 30 minutes.")
         await asyncio.sleep(30 * 60)
+
 
 
 async def main():

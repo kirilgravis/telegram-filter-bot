@@ -61,8 +61,16 @@ async def get_forwarded_source_ids(client: TelegramClient, limit: int) -> set[in
     return forwarded
 
 
-async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: int) -> None:
+async def run_catch_up(
+    client: TelegramClient, 
+    bot: TelegramClient, 
+    look_back: int,
+    processed_ids: set[int] = None
+) -> None:
     """Core logic to fetch missing messages and forward them."""
+    if processed_ids is None:
+        processed_ids = set()
+
     # ------------------------------------------------------------------
     # 1. Fetch last look_back messages from source, reverse to oldest-first
     # ------------------------------------------------------------------
@@ -111,7 +119,7 @@ async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: i
     for _, kind, payload in items:
         if kind == "single":
             msg = payload
-            if msg.id in already_forwarded:
+            if msg.id in already_forwarded or msg.id in processed_ids:
                 skipped_already += 1
                 continue
             if should_skip(msg.message or ""):
@@ -121,8 +129,8 @@ async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: i
             to_forward.append((kind, payload))
         else:
             album = payload
-            # If the first part is already in destination, whole album was forwarded
-            if album[0].id in already_forwarded:
+            # If the first part is already in destination or processed, whole album was handled
+            if album[0].id in already_forwarded or album[0].id in processed_ids:
                 skipped_already += 1
                 continue
             text = next((m.message for m in album if m.message), "")
@@ -133,7 +141,7 @@ async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: i
             to_forward.append((kind, payload))
 
     log.info(
-        "Summary — total: %d | already in destination: %d | blacklisted: %d | to forward: %d",
+        "Summary — total: %d | already handled: %d | blacklisted: %d | to forward: %d",
         len(items), skipped_already, skipped_blacklist, len(to_forward),
     )
 
@@ -146,14 +154,23 @@ async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: i
     # ------------------------------------------------------------------
     forwarded_count = 0
     for kind, payload in to_forward:
+        # Final double-check against processed_ids in case handler ran while we were sleeping
+        current_id = payload.id if kind == "single" else payload[0].id
+        if current_id in processed_ids:
+            log.info("Skipping %s %d — handled by real-time listener during catch-up loop", kind, current_id)
+            continue
+
         try:
             if kind == "single":
                 log.info("Forwarding message %d via bot", payload.id)
                 await bot.forward_messages(DESTINATION, payload.id, SOURCE_CHANNEL)
+                processed_ids.add(payload.id)
             else:
                 ids = [m.id for m in payload]
                 log.info("Forwarding album (%d items, first=%d) via bot", len(ids), ids[0])
                 await bot.forward_messages(DESTINATION, ids, SOURCE_CHANNEL)
+                for i in ids:
+                    processed_ids.add(i)
             forwarded_count += 1
             await asyncio.sleep(0.5)
         except Exception as e:
@@ -163,6 +180,7 @@ async def run_catch_up(client: TelegramClient, bot: TelegramClient, look_back: i
                 log.error("Failed to forward album (first=%d): %s", payload[0].id, e)
 
     log.info("Done. Forwarded %d item(s).", forwarded_count)
+
 
 
 async def main(look_back: int = DEFAULT_LOOK_BACK) -> None:
