@@ -38,16 +38,14 @@ async def main():
         print("Usage: python always_catch_up.py [mins] [amount]")
         sys.exit(1)
 
-    log.info("Starting Always-Catch-Up mode...")
-    log.info("Interval: %d minute(s) | Look back: %d messages", interval_mins, look_back)
-
+    # Initialize inside main() to ensure loop-binding is fresh
     client = TelegramClient("session", API_ID, API_HASH)
     bot = TelegramClient("bot_session", API_ID, API_HASH)
+    forward_lock = asyncio.Lock()
 
     await client.start()
-    log.info("User client connected.")
     await bot.start(bot_token=BOT_TOKEN)
-    log.info("Bot client connected.")
+    log.info("Always-Catch-Up connected (Interval: %d min, Look back: %d)", interval_mins, look_back)
 
     try:
         while True:
@@ -59,7 +57,7 @@ async def main():
                     PROCESSED_IDS.clear()
                     PROCESSED_IDS.update(keep)
 
-                await run_catch_up(client, bot, look_back, processed_ids=PROCESSED_IDS)
+                await run_catch_up(client, bot, look_back, processed_ids=PROCESSED_IDS, lock=forward_lock)
             except Exception as e:
                 log.exception("Error during catch-up: %s", e)
 

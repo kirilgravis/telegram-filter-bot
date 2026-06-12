@@ -65,7 +65,8 @@ async def run_catch_up(
     client: TelegramClient, 
     bot: TelegramClient, 
     look_back: int,
-    processed_ids: set[int] = None
+    processed_ids: set[int] = None,
+    lock: asyncio.Lock = None
 ) -> None:
     """Core logic to fetch missing messages and forward them."""
     if processed_ids is None:
@@ -161,19 +162,27 @@ async def run_catch_up(
             continue
 
         try:
-            if kind == "single":
-                log.info("Forwarding message %d via bot", payload.id)
-                await bot.forward_messages(DESTINATION, payload.id, SOURCE_CHANNEL)
-                processed_ids.add(payload.id)
-            else:
-                ids = [m.id for m in payload]
-                log.info("Forwarding album (%d items, first=%d) via bot", len(ids), ids[0])
-                await bot.forward_messages(DESTINATION, ids, SOURCE_CHANNEL)
-                for i in ids:
-                    processed_ids.add(i)
-            forwarded_count += 1
-            await asyncio.sleep(0.5)
+            if lock:
+                await lock.acquire()
+            
+            try:
+                if kind == "single":
+                    log.info("Forwarding message %d via bot", payload.id)
+                    await bot.forward_messages(DESTINATION, payload.id, SOURCE_CHANNEL)
+                    processed_ids.add(payload.id)
+                else:
+                    ids = [m.id for m in payload]
+                    log.info("Forwarding album (%d items, first=%d) via bot", len(ids), ids[0])
+                    await bot.forward_messages(DESTINATION, ids, SOURCE_CHANNEL)
+                    for i in ids:
+                        processed_ids.add(i)
+                forwarded_count += 1
+                await asyncio.sleep(1) # Extra safety sleep
+            finally:
+                if lock:
+                    lock.release()
         except Exception as e:
+
             if kind == "single":
                 log.error("Failed to forward message %d: %s", payload.id, e)
             else:
