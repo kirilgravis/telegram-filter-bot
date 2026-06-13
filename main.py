@@ -97,7 +97,7 @@ async def main():
 
         text = event.message.message or ""
         if should_skip(text):
-            log.info("Skipped message %s (blacklist)", event.message.id)
+            # log.info("Skipped message %s (blacklist)", event.message.id)
             return
 
         log.info("Forwarding message %s to %s via bot", event.message.id, DESTINATION)
